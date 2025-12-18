@@ -1,0 +1,61 @@
+[package]
+name = "hddllfrt"
+version = "0.1.0"
+edition = "2021"
+authors = ["DevNergis"]
+description = "Cross-platform HDD Low Level Format Tool"
+license = "MIT"
+repository = "https://github.com/DevNergis/HDDLLFRT"
+
+[dependencies]
+# Cross-platform system information
+sysinfo = "0.30"
+
+# Command line interface
+clap = { version = "4.4", features = ["derive", "color"] }
+dialoguer = "0.11"
+indicatif = "0.17"
+console = "0.15"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Serialization for configuration
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Async runtime (optional for future improvements)
+# tokio = { version = "1", features = ["full"] }
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# Platform-specific dependencies
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+nix = { version = "0.27", features = ["fs", "ioctl", "mount"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+    "Win32_System_SystemServices",
+    "Win32_System_WindowsProgramming",
+    "Win32_Devices_DeviceAndDriverInstallation",
+] }
+widestring = "1.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.9"
+io-kit-sys = "0.4"
+libc = "0.2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
