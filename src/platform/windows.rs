@@ -38,7 +38,10 @@ fn detect_devices_impl() -> Result<Vec<StorageDevice>> {
     for i in 0..16 {
         let device_path = format!("\\\\.\\PhysicalDrive{}", i);
 
-        let wide_path = U16CString::from_str(&device_path).unwrap();
+        let wide_path = match U16CString::from_str(&device_path) {
+            Ok(path) => path,
+            Err(_) => continue,
+        };
 
         unsafe {
             let handle = CreateFileW(

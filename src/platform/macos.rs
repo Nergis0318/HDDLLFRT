@@ -1,7 +1,5 @@
 use crate::device::{DeviceType, HealthStatus, SmartData, StorageDevice};
 use anyhow::{Context, Result};
-use std::ffi::CStr;
-use std::fs;
 use std::path::Path;
 
 pub fn detect_devices() -> Result<Vec<StorageDevice>> {
