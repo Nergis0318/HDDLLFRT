@@ -59,7 +59,7 @@ fn run() -> Result<()> {
                 handle_view_smart()?;
             }
             MainMenuChoice::Exit => {
-                println!("\n{}", style("Thank you for using HDD LLF Tool!").green());
+                println!("\n{}", style("Thank you for using HDDLLFRT!").green());
                 break;
             }
         }
@@ -145,7 +145,7 @@ fn handle_quick_format() -> Result<()> {
 }
 
 fn handle_secure_erase() -> Result<()> {
-    use dialoguer::{theme::ColorfulTheme, Input};
+    use dialoguer::{Input, theme::ColorfulTheme};
 
     let devices = platform::detect_devices().context("Failed to detect devices")?;
 

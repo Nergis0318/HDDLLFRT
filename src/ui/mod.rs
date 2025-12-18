@@ -1,6 +1,6 @@
 use anyhow::Result;
 use console::style;
-use dialoguer::{theme::ColorfulTheme, Confirm, Select};
+use dialoguer::{Confirm, Select, theme::ColorfulTheme};
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::device::operations;
@@ -14,11 +14,11 @@ pub fn print_banner() {
     );
     println!(
         "{}",
-        style("║     HDD Low Level Format Tool (Rust Edition)           ║").cyan()
+        style("║     HDD Low Level Format Rust(ool)                       ║").cyan()
     );
     println!(
         "{}",
-        style("║     Cross-platform Storage Device Utility              ║").cyan()
+        style("║     Cross-platform Storage Device Utility                ║").cyan()
     );
     println!(
         "{}",
@@ -82,6 +82,7 @@ pub fn list_devices(devices: &[StorageDevice]) {
             style(&device.model).bold()
         );
         println!("    Path:      {}", device.path);
+        println!("    Serial:    {}", device.serial);
         println!("    Capacity:  {}", device.format_capacity());
         println!("    Type:      {}", device.device_type);
         println!("    Interface: {}", device.interface);
@@ -218,11 +219,21 @@ pub fn perform_secure_erase(device: &StorageDevice, passes: u32) -> Result<()> {
 pub fn perform_verify(device: &StorageDevice) -> Result<()> {
     println!("\n{}", style("Verifying device...").cyan());
 
-    let pb = ProgressBar::new_spinner();
-    pb.set_message("Reading device sectors...");
-    pb.enable_steady_tick(std::time::Duration::from_millis(100));
+    let pb = ProgressBar::new(device.capacity);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+            .expect("Invalid progress bar template")
+            .progress_chars("#>-"),
+    );
 
-    let result = operations::verify_device(device)?;
+    let pb_clone = pb.clone();
+    let result = operations::verify_device(
+        device,
+        Some(Box::new(move |current, _total| {
+            pb_clone.set_position(current);
+        })),
+    )?;
 
     pb.finish_and_clear();
 

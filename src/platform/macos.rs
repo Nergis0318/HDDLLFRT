@@ -141,3 +141,11 @@ pub fn is_device_mounted(device: &StorageDevice) -> Result<bool> {
     let output_str = String::from_utf8_lossy(&output.stdout);
     Ok(output_str.contains("Mounted: Yes") || output_str.contains("Volume Name:"))
 }
+
+pub fn open_device_exclusive(path: &str) -> Result<std::fs::File> {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .context("Failed to open device")
+}

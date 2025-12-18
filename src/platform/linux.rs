@@ -162,3 +162,12 @@ pub fn is_device_mounted(device: &StorageDevice) -> Result<bool> {
 
     Ok(false)
 }
+
+/// Open a device for exclusive access
+pub fn open_device_exclusive(path: &str) -> Result<std::fs::File> {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .context("Failed to open device")
+}

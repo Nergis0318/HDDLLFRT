@@ -1,10 +1,10 @@
 [package]
 name = "hddllfrt"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["DevNergis"]
 description = "Cross-platform HDD Low Level Format Tool"
-license = "MIT"
+license = "AGPL-3.0-or-later"
 repository = "https://github.com/DevNergis/HDDLLFRT"
 
 [dependencies]
@@ -55,7 +55,11 @@ io-kit-sys = "0.4"
 libc = "0.2"
 
 [profile.release]
-opt-level = 3
-lto = true
+lto = "fat"
 codegen-units = 1
+panic = "abort"
 strip = true
+opt-level = 3
+debug = false
+incremental = true
+overflow-checks = true
