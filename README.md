@@ -1,4 +1,4 @@
-# HDDLLFRT - HDD 로우 레벨 포맷 Rust(ool)
+# HDDLLFRT - HDD Low Level Format Rust(ool)
 
 HDDGURU의 HDD LLF Low Level Format Tool에서 영감을 받아 Rust로 작성된 크로스 플랫폼 저장 장치 로우 레벨 포맷 도구입니다.
 
@@ -110,7 +110,7 @@ sudo ./target/release/hddllfrt
 
 진행하기 전에 항상 올바른 장치를 선택했는지 확인하십시오!
 
-<!-- ## 기술적 세부 사항
+## 기술적 세부 사항
 
 ### 장치 감지
 
@@ -141,32 +141,6 @@ sudo ./target/release/hddllfrt
 
 ## 개발
 
-### 프로젝트 구조
-
-```
-HDDLLFRT/
-├── src/
-│   ├── main.rs              # 애플리케이션 진입점
-│   ├── device/
-│   │   ├── mod.rs           # 장치 데이터 구조
-│   │   └── operations.rs    # 포맷/삭제 작업
-│   ├── platform/
-│   │   ├── mod.rs           # 플랫폼 추상화
-│   │   ├── linux.rs         # Linux 구현
-│   │   ├── windows.rs       # Windows 구현
-│   │   └── macos.rs         # macOS 구현
-│   └── ui/
-│       └── mod.rs           # 사용자 인터페이스
-├── Cargo.toml               # 의존성 및 메타데이터
-└── README.md               # 이 파일
-```
-
-### 테스트 실행
-
-```bash
-cargo test
-```
-
 ### 코드 스타일
 
 ```bash
@@ -176,25 +150,6 @@ cargo fmt
 # 문제 확인
 cargo clippy
 ```
-
-## 의존성
-
-주요 의존성:
-
-- `clap` - 명령줄 인수 파싱
-- `dialoguer` - 대화형 CLI 프롬프트
-- `indicatif` - 진행률 표시줄
-- `console` - 터미널 스타일링
-- `anyhow` - 오류 처리
-- `sysinfo` - 시스템 정보
-- 플랫폼별: `nix` (Linux), `windows` (Windows), `core-foundation` & `io-kit-sys` (macOS)
-
-## 한계
-
-- S.M.A.R.T. 데이터 읽기는 기본적입니다 (완벽한 지원을 위해서는 ATA 명령 구현 필요)
-- 일부 USB 장치가 올바르게 감지되지 않을 수 있습니다
-- NVMe 관련 기능이 완전히 구현되지 않았습니다
-- 모든 작업에 관리자 권한이 필요합니다 -->
 
 ## 향후 개선 사항
 
@@ -222,4 +177,5 @@ AGPL-3.0 license - 자세한 내용은 LICENSE 파일을 참조하십시오.
 ## 크레딧
 
 HDDGURU의 HDD LLF Low Level Format Tool에서 영감을 받았습니다.
+
 DevNergis가 Rust로 개발했습니다.
