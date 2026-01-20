@@ -604,7 +604,7 @@ struct STORAGE_PROTOCOL_SPECIFIC_DATA {
     ProtocolDataLength: u32,
     FixedProtocolReturnData: u32,
     ProtocolDataRequestSubValue2: u32,
-    Reserved: [u32; 2],
+    Reserved: [u32; 3],
 }
 
 #[cfg(target_os = "windows")]
@@ -646,7 +646,8 @@ unsafe fn read_nvme_smart_data_internal(handle: HANDLE) -> Result<SmartData> {
     request.ProtocolSpecific.DataType = NVMeDataTypeLogPage;
     request.ProtocolSpecific.ProtocolDataRequestValue = NVMeLogPageHealthInfo;
     request.ProtocolSpecific.ProtocolDataRequestSubValue = 0; // Lower 32 bits of offset (0 for Global Log)
-    request.ProtocolSpecific.ProtocolDataOffset = 0; // No data sent
+    request.ProtocolSpecific.ProtocolDataOffset =
+        mem::size_of::<STORAGE_PROTOCOL_SPECIFIC_DATA>() as u32;
     request.ProtocolSpecific.ProtocolDataLength = 512; // Expected length
 
     // Buffer for Result
