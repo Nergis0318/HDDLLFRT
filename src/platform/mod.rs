@@ -58,12 +58,14 @@ impl DeviceHandle {
 
 impl DeviceHandle {
     #[cfg(unix)]
+    #[allow(dead_code)]
     pub fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize> {
         use std::os::unix::fs::FileExt;
         self.file.write_at(buf, offset)
     }
 
     #[cfg(unix)]
+    #[allow(dead_code)]
     pub fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> {
         use std::os::unix::fs::FileExt;
         self.file.read_at(buf, offset)

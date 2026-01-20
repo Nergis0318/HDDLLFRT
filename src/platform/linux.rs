@@ -1,7 +1,43 @@
+use crate::device::nvme::{NvmeSmartLog, NVME_ADMIN_GET_LOG_PAGE, NVME_LOG_SMART_HEALTH};
 use crate::device::{DeviceType, HealthStatus, SmartData, StorageDevice};
 use anyhow::{Context, Result};
 use std::fs;
+use std::os::unix::io::AsRawFd;
 use std::path::Path;
+
+// NVMe ioctl definition
+#[repr(C)]
+#[derive(Debug, Default)]
+struct NvmeAdminCmd {
+    opcode: u8,
+    flags: u8,
+    rsvd1: u16,
+    nsid: u32,
+    cdw2: u32,
+    cdw3: u32,
+    metadata: u64,
+    addr: u64,
+    metadata_len: u32,
+    data_len: u32,
+    cdw10: u32,
+    cdw11: u32,
+    cdw12: u32,
+    cdw13: u32,
+    cdw14: u32,
+    cdw15: u32,
+    timeout_ms: u32,
+    result: u32,
+}
+
+const NVME_IOCTL_ID: u8 = b'N';
+const NVME_IOCTL_ADMIN_CMD_SEQ: u8 = 0x41;
+
+nix::ioctl_readwrite!(
+    nvme_admin_cmd,
+    NVME_IOCTL_ID,
+    NVME_IOCTL_ADMIN_CMD_SEQ,
+    NvmeAdminCmd
+);
 
 /// Detect all block devices on Linux
 pub fn detect_devices() -> Result<Vec<StorageDevice>> {
@@ -130,7 +166,11 @@ pub fn has_admin_privileges() -> bool {
     unsafe { libc::geteuid() == 0 }
 }
 
-pub fn read_smart_data(_device: &StorageDevice) -> Result<SmartData> {
+pub fn read_smart_data(device: &StorageDevice) -> Result<SmartData> {
+    if device.device_type == DeviceType::NVMe {
+        return read_nvme_smart_data(device);
+    }
+
     // Basic implementation - would need smartctl or ATA commands for real data
     // This is a placeholder that returns empty data
     Ok(SmartData {
@@ -139,6 +179,34 @@ pub fn read_smart_data(_device: &StorageDevice) -> Result<SmartData> {
         temperature: None,
         power_on_hours: None,
     })
+}
+
+fn read_nvme_smart_data(device: &StorageDevice) -> Result<SmartData> {
+    let file = fs::File::open(&device.path).context("Failed to open device for NVMe ioctl")?;
+    let fd = file.as_raw_fd();
+
+    let mut log_page = [0u8; 512];
+
+    // Construct Get Log Page command
+    // Log Identifier = 0x02 (SMART / Health Information)
+    // Number of Dwords Lower = 127 (512 bytes / 4 - 1)
+    let cdw10 = u32::from(NVME_LOG_SMART_HEALTH) | (127 << 16);
+
+    let mut cmd = NvmeAdminCmd {
+        opcode: NVME_ADMIN_GET_LOG_PAGE,
+        nsid: 0xFFFFFFFF, // Global namespace
+        addr: log_page.as_mut_ptr() as u64,
+        data_len: 512,
+        cdw10,
+        ..Default::default()
+    };
+
+    unsafe {
+        nvme_admin_cmd(fd, &mut cmd).context("Failed to execute NVMe Admin Command")?;
+    }
+
+    let nvme_log = NvmeSmartLog::parse(&log_page).context("Failed to parse NVMe Log Page")?;
+    Ok(nvme_log.to_smart_data())
 }
 
 pub fn is_device_mounted(device: &StorageDevice) -> Result<bool> {

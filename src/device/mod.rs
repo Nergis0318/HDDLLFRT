@@ -1,5 +1,6 @@
 use std::fmt;
 
+pub mod nvme;
 pub mod operations;
 
 /// Represents a storage device
@@ -79,6 +80,7 @@ pub fn format_bytes(bytes: u64) -> String {
 /// S.M.A.R.T. attribute
 #[derive(Debug, Clone)]
 pub struct SmartAttribute {
+    #[allow(dead_code)]
     pub id: u8,
     pub name: String,
     pub value: u8,
@@ -100,6 +102,7 @@ pub struct SmartData {
 pub enum HealthStatus {
     Good,
     Warning,
+    #[allow(dead_code)]
     Critical,
     Unknown,
 }

@@ -3,23 +3,23 @@ use crate::platform::DeviceHandle;
 use anyhow::{Context, Result};
 
 #[cfg(target_os = "windows")]
+use windows::core::PCWSTR;
+#[cfg(target_os = "windows")]
 use windows::Win32::Foundation::HANDLE;
 #[cfg(target_os = "windows")]
 use windows::Win32::Storage::FileSystem::{
-    CreateFileW, FILE_SHARE_READ, FILE_SHARE_WRITE, GetLogicalDrives, OPEN_EXISTING,
+    CreateFileW, GetLogicalDrives, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
 };
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Ioctl::IOCTL_DISK_GET_DRIVE_GEOMETRY_EX;
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Ioctl::{
+    PropertyStandardQuery, StorageDeviceProperty, StorageDeviceSeekPenaltyProperty,
     DEVICE_SEEK_PENALTY_DESCRIPTOR, FSCTL_DISMOUNT_VOLUME, FSCTL_LOCK_VOLUME, GETVERSIONINPARAMS,
-    IOCTL_STORAGE_GET_DEVICE_NUMBER, IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery,
-    SENDCMDINPARAMS, SENDCMDOUTPARAMS, SMART_GET_VERSION, SMART_RCV_DRIVE_DATA,
-    STORAGE_DEVICE_DESCRIPTOR, STORAGE_DEVICE_NUMBER, STORAGE_PROPERTY_QUERY,
-    StorageDeviceProperty, StorageDeviceSeekPenaltyProperty,
+    IOCTL_STORAGE_GET_DEVICE_NUMBER, IOCTL_STORAGE_QUERY_PROPERTY, SENDCMDINPARAMS,
+    SENDCMDOUTPARAMS, SMART_GET_VERSION, SMART_RCV_DRIVE_DATA, STORAGE_DEVICE_DESCRIPTOR,
+    STORAGE_DEVICE_NUMBER, STORAGE_PROPERTY_QUERY,
 };
-#[cfg(target_os = "windows")]
-use windows::core::PCWSTR;
 // #[cfg(target_os = "windows")]
 // use windows::Win32::System::SystemServices::{GENERIC_READ, GENERIC_WRITE};
 
@@ -102,8 +102,8 @@ fn detect_devices_impl() -> Result<Vec<StorageDevice>> {
 #[cfg(target_os = "windows")]
 unsafe fn get_disk_capacity(handle: HANDLE) -> u64 {
     use std::mem;
-    use windows::Win32::System::IO::DeviceIoControl;
     use windows::Win32::System::Ioctl::DISK_GEOMETRY_EX;
+    use windows::Win32::System::IO::DeviceIoControl;
 
     let mut geometry: DISK_GEOMETRY_EX = mem::zeroed();
     let mut bytes_returned: u32 = 0;
@@ -293,8 +293,8 @@ fn read_smart_data_impl(device: &StorageDevice) -> Result<SmartData> {
     use crate::device::SmartAttribute;
     use std::mem;
     use widestring::U16CString;
-    use windows::Win32::System::IO::DeviceIoControl;
     use windows::core::PCWSTR;
+    use windows::Win32::System::IO::DeviceIoControl;
 
     let wide_path = U16CString::from_str(&device.path)?;
 
@@ -313,6 +313,13 @@ fn read_smart_data_impl(device: &StorageDevice) -> Result<SmartData> {
             anyhow::bail!("Failed to open device for SMART data");
         }
         let handle = handle.unwrap();
+
+        // Handle NVMe devices
+        if device.device_type == DeviceType::NVMe {
+            let result = read_nvme_smart_data_internal(handle);
+            let _ = windows::Win32::Foundation::CloseHandle(handle);
+            return result;
+        }
 
         // Check SMART version/support
         let mut version_params: GETVERSIONINPARAMS = mem::zeroed();
@@ -584,4 +591,100 @@ fn lock_and_dismount_volume(handle: HANDLE) -> bool {
     }
 
     true
+}
+
+#[cfg(target_os = "windows")]
+#[repr(C)]
+struct STORAGE_PROTOCOL_SPECIFIC_DATA {
+    ProtocolType: u32,
+    DataType: u32,
+    ProtocolDataRequestValue: u32,
+    ProtocolDataRequestSubValue: u32,
+    ProtocolDataOffset: u32,
+    ProtocolDataLength: u32,
+    FixedProtocolReturnData: u32,
+    ProtocolDataRequestSubValue2: u32,
+    Reserved: [u32; 2],
+}
+
+#[cfg(target_os = "windows")]
+#[repr(C)]
+struct StoragePropertyQueryRequest {
+    PropertyId: u32,
+    QueryType: u32,
+    ProtocolSpecific: STORAGE_PROTOCOL_SPECIFIC_DATA,
+}
+
+#[cfg(target_os = "windows")]
+#[repr(C)]
+struct StorageProtocolDataDescriptor {
+    Version: u32,
+    Size: u32,
+    ProtocolDataOffset: u32,
+    ProtocolDataLength: u32,
+}
+
+#[cfg(target_os = "windows")]
+unsafe fn read_nvme_smart_data_internal(handle: HANDLE) -> Result<SmartData> {
+    use crate::device::nvme::NvmeSmartLog;
+    use std::mem;
+    use windows::Win32::System::IO::DeviceIoControl;
+
+    // Constants
+    const StorageAdapterProtocolSpecificProperty: u32 = 49;
+    const PropertyStandardQuery: u32 = 0;
+    const ProtocolTypeNvme: u32 = 2;
+    const NVMeDataTypeLogPage: u32 = 3;
+    const NVMeLogPageHealthInfo: u32 = 2;
+
+    let mut request: StoragePropertyQueryRequest = mem::zeroed();
+
+    request.PropertyId = StorageAdapterProtocolSpecificProperty;
+    request.QueryType = PropertyStandardQuery;
+
+    request.ProtocolSpecific.ProtocolType = ProtocolTypeNvme;
+    request.ProtocolSpecific.DataType = NVMeDataTypeLogPage;
+    request.ProtocolSpecific.ProtocolDataRequestValue = NVMeLogPageHealthInfo;
+    request.ProtocolSpecific.ProtocolDataRequestSubValue = 0; // Lower 32 bits of offset (0 for Global Log)
+    request.ProtocolSpecific.ProtocolDataOffset = 0; // No data sent
+    request.ProtocolSpecific.ProtocolDataLength = 512; // Expected length
+
+    // Buffer for Result
+    // Header (approx 16 bytes) + 512 bytes data
+    let mut buffer = [0u8; 1024];
+    let mut bytes_returned = 0;
+
+    let result = DeviceIoControl(
+        handle,
+        IOCTL_STORAGE_QUERY_PROPERTY,
+        Some(&request as *const _ as *const _),
+        mem::size_of::<StoragePropertyQueryRequest>() as u32,
+        Some(buffer.as_mut_ptr() as *mut _),
+        buffer.len() as u32,
+        Some(&mut bytes_returned),
+        None,
+    );
+
+    if result.is_err() {
+        // Fallback or error
+        anyhow::bail!("Failed to query NVMe SMART data (IOCTL failed)");
+    }
+
+    // Parse result
+    let descriptor = &*(buffer.as_ptr() as *const StorageProtocolDataDescriptor);
+
+    if descriptor.ProtocolDataLength < 512 {
+        anyhow::bail!("Returned NVMe log data too short");
+    }
+
+    if descriptor.ProtocolDataOffset as usize + 512 > buffer.len() {
+        anyhow::bail!("NVMe data offset out of bounds");
+    }
+
+    let data_ptr = buffer.as_ptr().add(descriptor.ProtocolDataOffset as usize);
+    let slice = std::slice::from_raw_parts(data_ptr, 512);
+
+    let log = NvmeSmartLog::parse(slice).context("Invalid NVMe Log Page")?;
+
+    Ok(log.to_smart_data())
 }
