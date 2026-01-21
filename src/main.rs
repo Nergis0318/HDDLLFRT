@@ -55,9 +55,6 @@ fn run() -> Result<()> {
             MainMenuChoice::VerifyDevice => {
                 handle_verify_device()?;
             }
-            MainMenuChoice::ViewSmart => {
-                handle_view_smart()?;
-            }
             MainMenuChoice::Exit => {
                 println!("\n{}", style("Thank you for using HDDLLFRT!").green());
                 break;
@@ -212,37 +209,6 @@ fn handle_verify_device() -> Result<()> {
     }
 
     ui::perform_verify(device)?;
-
-    Ok(())
-}
-
-fn handle_view_smart() -> Result<()> {
-    let devices = platform::detect_devices().context("Failed to detect devices")?;
-
-    if devices.is_empty() {
-        println!("{}", style("No devices found.").yellow());
-        return Ok(());
-    }
-
-    ui::list_devices(&devices);
-
-    let selection = ui::select_device(&devices)?;
-    let device = &devices[selection];
-
-    println!("\n{}", style("Reading S.M.A.R.T. data...").cyan());
-
-    match platform::read_smart_data(device) {
-        Ok(smart_data) => {
-            ui::display_smart_data(device, &smart_data);
-        }
-        Err(e) => {
-            println!(
-                "{} Failed to read S.M.A.R.T. data: {}",
-                style("Error:").red().bold(),
-                e
-            );
-        }
-    }
 
     Ok(())
 }

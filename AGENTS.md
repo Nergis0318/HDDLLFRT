@@ -1,106 +1,82 @@
-## HDDLLFRT Agent Guide
+# Agent Guidelines for HDDLLFRT
 
-Purpose
-- This repository is a cross-platform, destructive disk utility written in Rust.
-- Safety and correctness are more important than speed of iteration.
+This repository contains the source code for the HDD Low Level Format Tool (HDDLLFRT), a cross-platform utility written in Rust.
 
-Sources of truth
-- Project overview and commands: `README.md`.
-- Architecture details: `docs/ARCHITECTURE.md`.
-- Usage and safety guidance: `docs/USAGE.md`.
-- CI expectations: `.github/workflows/ci.yml`.
-- AI coding instructions (must follow): `.github/copilot-instructions.md`.
+## 1. Build & Test Commands
 
-Critical safety context
-- The tool performs destructive operations (zero-fill, secure erase).
-- Never weaken safety prompts or privilege checks.
-- Do not change device-selection flow without adding guardrails.
+### Build
 
-Build, lint, and test
-- Build (debug): `cargo build`.
-- Build (release): `cargo build --release`.
-- Run (release): `cargo run --release`.
-- Format: `cargo fmt`.
-- Format check (CI): `cargo fmt -- --check`.
-- Lint (CI): `cargo clippy -- -D warnings -A dead_code -A clippy::upper_case_acronyms`.
-- Tests: `cargo test`.
-- Single test by name: `cargo test <test_name>`.
-- Single test in module: `cargo test module_name::test_name`.
-- Single integration test target: `cargo test --test <test_file>`.
+- **Build (Dev):** `cargo build`
+- **Build (Release):** `cargo build --release`
+- **Check (Fast):** `cargo check`
 
-CI parity notes
-- CI runs format check, clippy with warnings denied, build, tests, and release build.
-- Keep clippy clean; follow the allow list used in CI when needed.
+### Test
 
-Repository layout
-- Entry point: `src/main.rs`.
-- UI layer: `src/ui/mod.rs`.
-- Device model and data: `src/device/mod.rs`.
-- Device operations: `src/device/operations.rs`.
-- Platform abstraction: `src/platform/mod.rs`.
-- Platform-specific implementations: `src/platform/linux.rs`, `src/platform/windows.rs`, `src/platform/macos.rs`.
+- **Run All Tests:** `cargo test`
+- **Run Single Test:** `cargo test -- <test_function_name>` (e.g., `cargo test -- test_device_detection`)
+- **Run Tests with Logs:** `RUST_LOG=debug cargo test`
 
-Architecture rules (from Copilot instructions)
-- Use `#[cfg(target_os = "...")]` for OS-specific behavior.
-- Add platform-specific logic in the OS file and expose via `src/platform/mod.rs`.
-- Treat devices as raw files and open via `platform::open_device_exclusive`.
-- Keep UI logic in `src/ui/`, core operations in `src/device/`.
-- Keep `src/main.rs` lean and delegate to UI and device modules.
+### Lint & Format
 
-Error handling
-- Use `anyhow::Result<T>` for app-level errors.
-- Use `thiserror` for library error types when defining new error enums.
-- Add context with `.context("...")` before propagating errors.
-- Prefer early returns with `?` and minimal nesting.
+- **Format Code:** `cargo fmt` (Run this before committing)
+- **Lint Code:** `cargo clippy` (Fix warnings where possible)
 
-Safety checks
-- Always verify admin/root privileges before destructive operations.
-- Always ensure device is unmounted before write operations.
-- Maintain two-step confirmation for destructive actions.
-- Log and surface user-facing errors clearly.
+## 2. Code Style & Conventions
 
-Code style
-- Formatting: standard `rustfmt` defaults.
-- Imports: group by std, external crates, then local modules; keep lines tidy.
-- Types: use explicit types for public APIs and struct fields.
-- Naming: `snake_case` for functions/vars, `PascalCase` for types/traits, `SCREAMING_SNAKE_CASE` for constants.
-- Enums: prefer explicit variants (`Unknown`, `Warning`) instead of magic values.
-- Prefer `Result<T>` return types; avoid panics in normal control flow.
-- Use `const` for buffer sizes and magic numbers used across functions.
+### General
 
-Device operation patterns
-- Use buffered reads/writes with chunk sizes (4MB or 10MB) as seen in `src/device/operations.rs`.
-- Always `seek` before writing, and `sync_all()` after writes.
-- Progress updates go through callback functions or progress bars.
+- **Language:** Rust (2024 Edition).
+- **Formatting:** Strictly adhere to `rustfmt` standards.
+- **Organization:**
+  - `src/main.rs`: CLI entry point and high-level command handlers.
+  - `src/device/`: Core device abstractions and types.
+  - `src/platform/`: OS-specific implementations (Windows, Linux, macOS).
+  - `src/ui/`: CLI interaction and display logic.
 
-Platform-specific guidance
-- Linux: use sysfs (`/sys/block`) and `/proc/mounts` for discovery and mount checks.
-- Windows: use Win32 APIs via the `windows` crate; lock and dismount volumes carefully.
-- macOS: use `diskutil` and parse output; keep it defensive and error-aware.
+### Naming
 
-Logging
-- Logging uses `log` + `env_logger` initialized in `main`.
-- Prefer info-level logging for operational status and warnings for risky states.
+- **Functions/Variables:** `snake_case` (e.g., `detect_devices`, `user_input`).
+- **Types (Structs/Enums):** `PascalCase` (e.g., `StorageDevice`, `DeviceType`).
+- **Constants:** `SCREAMING_SNAKE_CASE` (e.g., `GENERIC_READ`).
+- **Files:** `snake_case.rs`.
 
-Testing notes
-- There are currently limited tests; add unit tests for pure logic (e.g., `format_bytes`).
-- Avoid tests that perform real device operations unless fully mocked.
+### Imports
 
-Documentation expectations
-- Update `README.md` or `docs/USAGE.md` when adding user-visible features.
-- Keep safety warnings prominent when behavior changes.
+Group imports in the following order:
 
-When editing existing code
-- Preserve the CLI interaction style (dialoguer + console + indicatif).
-- Preserve warning banners, confirmation flow, and error messages.
-- Keep cross-platform dispatching centralized in `src/platform/mod.rs`.
+1. Standard Library (`use std::...`)
+2. External Crates (`use anyhow::...`, `use windows::...`)
+3. Internal Modules (`use crate::device::...`)
 
-Common commands for agents
-- List devices: run the app in a privileged shell.
-- Check formatting: `cargo fmt -- --check`.
-- Run clippy locally before committing: `cargo clippy -- -D warnings -A dead_code -A clippy::upper_case_acronyms`.
+### Error Handling
 
-Gotchas
-- Running device operations without elevated privileges will fail.
-- Be cautious with Unicode symbols in UI output; the code already uses them.
-- This repo targets Rust 2024 edition; keep new code compatible.
+- **Library:** Use `anyhow` for application-level error handling.
+- **Return Type:** Use `anyhow::Result<T>` for functions that can fail.
+- **Context:** Always attach context to errors when propagating:
+
+  ```rust
+  .context("Failed to detect devices")?
+  ```
+
+- **Panic:** Avoid `unwrap()` or `expect()` in production code unless you are 100% certain it cannot fail. Use `?` propagation.
+
+### OS-Specific Code
+
+- **Feature Flags:** Use `#[cfg(target_os = "...")]` to guard platform-specific code.
+- **Safety:** Minimize `unsafe` blocks. When using FFI (e.g., Windows API), wrap `unsafe` blocks tightly and justify if complex.
+- **Windows API:** Use the `windows` crate (specifically `windows::Win32`).
+
+### Logging & Output
+
+- **User Output:** Use `println!` and `eprintln!` for CLI interaction (menus, prompts). Use `console::style` for coloring.
+- **Debug/Info:** Use `log::info!`, `log::debug!`, etc., for internal diagnostics. Initialize `env_logger` in `main`.
+
+## 3. Cursor/Copilot Rules
+
+_(No specific existing rules found in .cursor/rules/ or .github/copilot-instructions.md. Follow standard Rust best practices defined above.)_
+
+## 4. Agent Workflow
+
+1. **Analyze:** specific platform implementation files (e.g., `src/platform/windows.rs`) before making OS-specific changes.
+2. **Verify:** Always run `cargo check` after edits.
+3. **Safety:** When modifying device operations (formatting/erasing), ensure safety checks (admin privileges, confirmation prompts) are preserved.

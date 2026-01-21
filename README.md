@@ -10,11 +10,11 @@ HDDGURU의 HDD LLF Low Level Format Tool에서 영감을 받아 Rust로 작성�
 - **빠른 포맷 (Quick Format)**: 시작과 끝 섹터만 빠르게 포맷
 - **보안 삭제 (Secure Erase)**: 다양한 패턴으로 여러 번 덮어쓰기
 - **장치 검증 (Device Verification)**: 모든 섹터 읽기 및 검증
-- **S.M.A.R.T. 데이터**: 장치 상태 정보 확인
 
 🖥️ **크로스 플랫폼 지원:**
 
 <!-- - ✅ Linux (Ubuntu, Fedora, Arch에서 테스트됨) -->
+
 - ✅ Windows (Windows 10/11)
 <!-- - ✅ macOS (10.15+) -->
 
@@ -86,8 +86,7 @@ sudo ./target/release/hddllfrt
 3. **빠른 포맷 (Quick Format)** - 빠른 포맷 (시작과 끝 부분만)
 4. **보안 삭제 (Secure Erase)** - 다중 패스 보안 삭제 (1-10 패스)
 5. **장치 검증 (Verify Device)** - 모든 섹터 읽기 및 검증
-6. **S.M.A.R.T. 데이터 보기 (View S.M.A.R.T. Data)** - 장치 상태 정보 표시
-7. **종료 (Exit)** - 애플리케이션 종료
+6. **종료 (Exit)** - 애플리케이션 종료
 
 ### 안전 기능
 
@@ -153,7 +152,6 @@ cargo clippy
 
 ## 향후 개선 사항
 
-- [ ] ATA 명령을 통한 전체 S.M.A.R.T. 속성 읽기
 - [ ] 불량 섹터 리매핑
 - [ ] 벤치마크/속도 테스트
 - [ ] 더 많은 장치 유형 지원

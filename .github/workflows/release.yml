@@ -25,7 +25,7 @@ jobs:
             target: aarch64-pc-windows-msvc
             arch: arm64
             platform: windows
-          
+
           # Linux builds
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
@@ -97,6 +97,7 @@ jobs:
   release:
     name: Upload Release Assets
     needs: build
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -115,16 +116,5 @@ jobs:
         if: github.event_name == 'release'
         with:
           files: artifacts/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create release (workflow_dispatch)
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          TAG_NAME="v$(date +'%Y%m%d-%H%M%S')"
-          gh release create "$TAG_NAME" \
-            --title "Release $TAG_NAME" \
-            --notes "Automated release build" \
-            artifacts/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

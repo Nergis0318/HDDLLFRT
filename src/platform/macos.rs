@@ -1,4 +1,4 @@
-use crate::device::{DeviceType, HealthStatus, SmartData, StorageDevice};
+use crate::device::{DeviceType, StorageDevice};
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -117,16 +117,6 @@ fn extract_plist_value(plist: &str, key: &str) -> Option<String> {
 
 pub fn has_admin_privileges() -> bool {
     unsafe { libc::geteuid() == 0 }
-}
-
-pub fn read_smart_data(_device: &StorageDevice) -> Result<SmartData> {
-    // Could use smartctl on macOS, but for now return placeholder
-    Ok(SmartData {
-        attributes: Vec::new(),
-        health_status: HealthStatus::Unknown,
-        temperature: None,
-        power_on_hours: None,
-    })
 }
 
 pub fn is_device_mounted(device: &StorageDevice) -> Result<bool> {

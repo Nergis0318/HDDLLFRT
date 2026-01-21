@@ -1,4 +1,4 @@
-use crate::device::{SmartData, StorageDevice};
+use crate::device::StorageDevice;
 use anyhow::Result;
 
 #[cfg(target_os = "linux")]
@@ -58,14 +58,12 @@ impl DeviceHandle {
 
 impl DeviceHandle {
     #[cfg(unix)]
-    #[allow(dead_code)]
     pub fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize> {
         use std::os::unix::fs::FileExt;
         self.file.write_at(buf, offset)
     }
 
     #[cfg(unix)]
-    #[allow(dead_code)]
     pub fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> {
         use std::os::unix::fs::FileExt;
         self.file.read_at(buf, offset)
@@ -108,23 +106,6 @@ pub fn has_admin_privileges() -> bool {
 
     #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
     return false;
-}
-
-/// Read S.M.A.R.T. data from a device
-pub fn read_smart_data(device: &StorageDevice) -> Result<SmartData> {
-    #[cfg(target_os = "linux")]
-    return linux::read_smart_data(device);
-
-    #[cfg(target_os = "windows")]
-    return windows::read_smart_data(device);
-
-    #[cfg(target_os = "macos")]
-    return macos::read_smart_data(device);
-
-    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
-    {
-        anyhow::bail!("Unsupported operating system");
-    }
 }
 
 /// Check if a device is mounted

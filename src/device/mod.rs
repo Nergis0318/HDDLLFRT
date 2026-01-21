@@ -1,6 +1,5 @@
 use std::fmt;
 
-pub mod nvme;
 pub mod operations;
 
 /// Represents a storage device
@@ -75,45 +74,4 @@ pub fn format_bytes(bytes: u64) -> String {
     let value = bytes_f / (1024_f64.powi(unit_index as i32));
 
     format!("{:.2} {}", value, UNITS[unit_index])
-}
-
-/// S.M.A.R.T. attribute
-#[derive(Debug, Clone)]
-pub struct SmartAttribute {
-    #[allow(dead_code)]
-    pub id: u8,
-    pub name: String,
-    pub value: u8,
-    pub worst: u8,
-    pub threshold: u8,
-    pub raw_value: u64,
-}
-
-/// S.M.A.R.T. data for a device
-#[derive(Debug, Clone)]
-pub struct SmartData {
-    pub attributes: Vec<SmartAttribute>,
-    pub health_status: HealthStatus,
-    pub temperature: Option<i32>,
-    pub power_on_hours: Option<u64>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum HealthStatus {
-    Good,
-    Warning,
-    #[allow(dead_code)]
-    Critical,
-    Unknown,
-}
-
-impl fmt::Display for HealthStatus {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            HealthStatus::Good => write!(f, "Good"),
-            HealthStatus::Warning => write!(f, "Warning"),
-            HealthStatus::Critical => write!(f, "Critical"),
-            HealthStatus::Unknown => write!(f, "Unknown"),
-        }
-    }
 }

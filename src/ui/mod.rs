@@ -3,8 +3,8 @@ use console::style;
 use dialoguer::{Confirm, Select, theme::ColorfulTheme};
 use indicatif::{ProgressBar, ProgressStyle};
 
+use crate::device::StorageDevice;
 use crate::device::operations;
-use crate::device::{SmartData, StorageDevice};
 use crate::platform;
 
 pub fn print_banner() {
@@ -34,7 +34,6 @@ pub fn show_main_menu() -> Result<MainMenuChoice> {
         "Quick Format",
         "Secure Erase (Multiple Passes)",
         "Verify Device",
-        "View S.M.A.R.T. Data",
         "Exit",
     ];
 
@@ -50,8 +49,7 @@ pub fn show_main_menu() -> Result<MainMenuChoice> {
         2 => MainMenuChoice::QuickFormat,
         3 => MainMenuChoice::SecureErase,
         4 => MainMenuChoice::VerifyDevice,
-        5 => MainMenuChoice::ViewSmart,
-        6 => MainMenuChoice::Exit,
+        5 => MainMenuChoice::Exit,
         _ => MainMenuChoice::Exit,
     })
 }
@@ -62,7 +60,6 @@ pub enum MainMenuChoice {
     QuickFormat,
     SecureErase,
     VerifyDevice,
-    ViewSmart,
     Exit,
 }
 
@@ -244,52 +241,6 @@ pub fn perform_verify(device: &StorageDevice) -> Result<()> {
     }
 
     Ok(())
-}
-
-pub fn display_smart_data(device: &StorageDevice, smart_data: &SmartData) {
-    println!(
-        "\n{}",
-        style(format!("S.M.A.R.T. Data for {}", device.model))
-            .bold()
-            .cyan()
-    );
-    println!("{}", style("─".repeat(80)).dim());
-
-    println!(
-        "Health Status: {}",
-        match smart_data.health_status {
-            crate::device::HealthStatus::Good => style("Good").green(),
-            crate::device::HealthStatus::Warning => style("Warning").yellow(),
-            crate::device::HealthStatus::Critical => style("Critical").red(),
-            crate::device::HealthStatus::Unknown => style("Unknown").dim(),
-        }
-    );
-
-    if let Some(temp) = smart_data.temperature {
-        println!("Temperature:   {}°C", temp);
-    }
-
-    if let Some(hours) = smart_data.power_on_hours {
-        println!("Power On Time: {} hours", hours);
-    }
-
-    if smart_data.attributes.is_empty() {
-        println!("\n{}", style("No S.M.A.R.T. attributes available").yellow());
-        println!(
-            "{}",
-            style("Note: S.M.A.R.T. data reading requires additional implementation").dim()
-        );
-    } else {
-        println!("\nAttributes:");
-        for attr in &smart_data.attributes {
-            println!(
-                "  {}: {} (Value: {}, Worst: {}, Threshold: {})",
-                attr.name, attr.raw_value, attr.value, attr.worst, attr.threshold
-            );
-        }
-    }
-
-    println!();
 }
 
 pub fn check_prerequisites(device: &StorageDevice) -> Result<()> {
