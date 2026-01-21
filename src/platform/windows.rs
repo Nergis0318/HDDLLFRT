@@ -620,8 +620,7 @@ struct StoragePropertyQueryRequest {
 struct StorageProtocolDataDescriptor {
     Version: u32,
     Size: u32,
-    ProtocolDataOffset: u32,
-    ProtocolDataLength: u32,
+    ProtocolSpecificData: STORAGE_PROTOCOL_SPECIFIC_DATA,
 }
 
 #[cfg(target_os = "windows")]
@@ -671,18 +670,31 @@ unsafe fn read_nvme_smart_data_internal(handle: HANDLE) -> Result<SmartData> {
         anyhow::bail!("Failed to query NVMe SMART data (IOCTL failed)");
     }
 
+    if bytes_returned < mem::size_of::<StorageProtocolDataDescriptor>() as u32 {
+        anyhow::bail!("Returned NVMe descriptor too short");
+    }
+
     // Parse result
     let descriptor = &*(buffer.as_ptr() as *const StorageProtocolDataDescriptor);
+    let protocol_data = &descriptor.ProtocolSpecificData;
 
-    if descriptor.ProtocolDataLength < 512 {
+    if protocol_data.ProtocolDataLength < 512 {
         anyhow::bail!("Returned NVMe log data too short");
     }
 
-    if descriptor.ProtocolDataOffset as usize + 512 > buffer.len() {
+    if protocol_data.ProtocolDataOffset == 0 {
+        anyhow::bail!("Returned NVMe log data offset is zero");
+    }
+
+    let data_offset = mem::size_of::<StorageProtocolDataDescriptor>()
+        - mem::size_of::<STORAGE_PROTOCOL_SPECIFIC_DATA>()
+        + protocol_data.ProtocolDataOffset as usize;
+
+    if data_offset + 512 > buffer.len() {
         anyhow::bail!("NVMe data offset out of bounds");
     }
 
-    let data_ptr = buffer.as_ptr().add(descriptor.ProtocolDataOffset as usize);
+    let data_ptr = buffer.as_ptr().add(data_offset);
     let slice = std::slice::from_raw_parts(data_ptr, 512);
 
     let log = NvmeSmartLog::parse(slice).context("Invalid NVMe Log Page")?;
