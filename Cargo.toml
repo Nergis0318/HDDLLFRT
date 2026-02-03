@@ -8,31 +8,18 @@ license = "AGPL-3.0-or-later"
 repository = "https://github.com/DevNergis/HDDLLFRT"
 
 [dependencies]
-# Cross-platform system information
 sysinfo = "0.30"
-
-# Command line interface
 clap = { version = "4.4", features = ["derive", "color"] }
 dialoguer = "0.11"
 indicatif = "0.17"
 console = "0.15"
-
-# Error handling
 anyhow = "1.0"
 thiserror = "1.0"
-
-# Serialization for configuration
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-
-# Async runtime (optional for future improvements)
-# tokio = { version = "1", features = ["full"] }
-
-# Logging
 log = "0.4"
 env_logger = "0.11"
 
-# Platform-specific dependencies
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"
 nix = { version = "0.27", features = ["fs", "ioctl", "mount"] }
