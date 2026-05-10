@@ -56,6 +56,12 @@ impl DeviceHandle {
     }
 }
 
+impl Drop for DeviceHandle {
+    fn drop(&mut self) {
+        let _ = self.file.sync_all();
+    }
+}
+
 impl DeviceHandle {
     #[cfg(unix)]
     pub fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize> {

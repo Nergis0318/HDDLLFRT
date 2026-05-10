@@ -152,17 +152,21 @@ pub fn confirm_dangerous_operation(device: &StorageDevice, operation: &str) -> R
     Ok(final_confirm)
 }
 
-pub fn perform_low_level_format(device: &StorageDevice) -> Result<()> {
-    println!("\n{}", style("Starting low-level format...").cyan());
-
-    let pb = ProgressBar::new(device.capacity);
+fn create_progress_bar(capacity: u64) -> ProgressBar {
+    let pb = ProgressBar::new(capacity);
     pb.set_style(
         ProgressStyle::default_bar()
             .template("[{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
             .expect("Invalid progress bar template")
             .progress_chars("#>-"),
     );
+    pb
+}
 
+pub fn perform_low_level_format(device: &StorageDevice) -> Result<()> {
+    println!("\n{}", style("Starting low-level format...").cyan());
+
+    let pb = create_progress_bar(device.capacity);
     let pb_clone = pb.clone();
     operations::low_level_format(
         device,
@@ -201,8 +205,17 @@ pub fn perform_secure_erase(device: &StorageDevice, passes: u32) -> Result<()> {
         style(format!("Starting secure erase ({} passes)...", passes)).cyan()
     );
 
-    operations::secure_erase(device, passes)?;
+    let pb = create_progress_bar(device.capacity);
+    let pb_clone = pb.clone();
+    operations::secure_erase(
+        device,
+        passes,
+        Some(Box::new(move |current, _total| {
+            pb_clone.set_position(current);
+        })),
+    )?;
 
+    pb.finish_with_message("Secure erase completed");
     println!(
         "{}",
         style("✓ Secure erase completed successfully")
@@ -216,14 +229,7 @@ pub fn perform_secure_erase(device: &StorageDevice, passes: u32) -> Result<()> {
 pub fn perform_verify(device: &StorageDevice) -> Result<()> {
     println!("\n{}", style("Verifying device...").cyan());
 
-    let pb = ProgressBar::new(device.capacity);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
-            .expect("Invalid progress bar template")
-            .progress_chars("#>-"),
-    );
-
+    let pb = create_progress_bar(device.capacity);
     let pb_clone = pb.clone();
     let result = operations::verify_device(
         device,

@@ -8,15 +8,10 @@ license = "AGPL-3.0-or-later"
 repository = "https://github.com/DevNergis/HDDLLFRT"
 
 [dependencies]
-sysinfo = "0.30"
-clap = { version = "4.4", features = ["derive", "color"] }
 dialoguer = "0.11"
 indicatif = "0.17"
 console = "0.15"
 anyhow = "1.0"
-thiserror = "1.0"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 log = "0.4"
 env_logger = "0.11"
 
@@ -37,9 +32,8 @@ windows = { version = "0.52", features = [
 widestring = "1.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-core-foundation = "0.9"
-io-kit-sys = "0.4"
 libc = "0.2"
+plist = "1"
 
 [profile.release]
 lto = "fat"
@@ -48,5 +42,5 @@ panic = "abort"
 strip = true
 opt-level = 3
 debug = false
-incremental = true
+incremental = false
 overflow-checks = true

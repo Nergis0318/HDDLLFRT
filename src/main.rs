@@ -9,7 +9,6 @@ mod ui;
 use ui::MainMenuChoice;
 
 fn main() {
-    // Initialize logger
     env_logger::Builder::from_default_env()
         .filter_level(log::LevelFilter::Info)
         .init();
@@ -23,7 +22,6 @@ fn main() {
 fn run() -> Result<()> {
     ui::print_banner();
 
-    // Check for admin privileges early
     if !platform::has_admin_privileges() {
         println!(
             "{}",
@@ -44,10 +42,10 @@ fn run() -> Result<()> {
                 handle_list_devices()?;
             }
             MainMenuChoice::LowLevelFormat => {
-                handle_low_level_format()?;
+                handle_device_operation("LOW LEVEL FORMAT", ui::perform_low_level_format)?;
             }
             MainMenuChoice::QuickFormat => {
-                handle_quick_format()?;
+                handle_device_operation("QUICK FORMAT", ui::perform_quick_format)?;
             }
             MainMenuChoice::SecureErase => {
                 handle_secure_erase()?;
@@ -79,7 +77,10 @@ fn handle_list_devices() -> Result<()> {
     Ok(())
 }
 
-fn handle_low_level_format() -> Result<()> {
+fn handle_device_operation<F>(operation_name: &str, perform: F) -> Result<()>
+where
+    F: FnOnce(&device::StorageDevice) -> Result<()>,
+{
     let devices = platform::detect_devices().context("Failed to detect devices")?;
 
     if devices.is_empty() {
@@ -92,51 +93,17 @@ fn handle_low_level_format() -> Result<()> {
     let selection = ui::select_device(&devices)?;
     let device = &devices[selection];
 
-    // Check prerequisites
     if let Err(e) = ui::check_prerequisites(device) {
         println!("{} {}", style("Error:").red().bold(), e);
         return Ok(());
     }
 
-    // Get confirmation
-    if !ui::confirm_dangerous_operation(device, "LOW LEVEL FORMAT")? {
+    if !ui::confirm_dangerous_operation(device, operation_name)? {
         println!("{}", style("Operation cancelled.").yellow());
         return Ok(());
     }
 
-    // Perform format
-    ui::perform_low_level_format(device)?;
-
-    Ok(())
-}
-
-fn handle_quick_format() -> Result<()> {
-    let devices = platform::detect_devices().context("Failed to detect devices")?;
-
-    if devices.is_empty() {
-        println!("{}", style("No devices found.").yellow());
-        return Ok(());
-    }
-
-    ui::list_devices(&devices);
-
-    let selection = ui::select_device(&devices)?;
-    let device = &devices[selection];
-
-    // Check prerequisites
-    if let Err(e) = ui::check_prerequisites(device) {
-        println!("{} {}", style("Error:").red().bold(), e);
-        return Ok(());
-    }
-
-    // Get confirmation
-    if !ui::confirm_dangerous_operation(device, "QUICK FORMAT")? {
-        println!("{}", style("Operation cancelled.").yellow());
-        return Ok(());
-    }
-
-    // Perform format
-    ui::perform_quick_format(device)?;
+    perform(device)?;
 
     Ok(())
 }
@@ -156,13 +123,11 @@ fn handle_secure_erase() -> Result<()> {
     let selection = ui::select_device(&devices)?;
     let device = &devices[selection];
 
-    // Check prerequisites
     if let Err(e) = ui::check_prerequisites(device) {
         println!("{} {}", style("Error:").red().bold(), e);
         return Ok(());
     }
 
-    // Ask for number of passes
     let passes: u32 = Input::with_theme(&ColorfulTheme::default())
         .with_prompt("Number of passes (1-10)")
         .default(3)
@@ -175,13 +140,11 @@ fn handle_secure_erase() -> Result<()> {
         })
         .interact_text()?;
 
-    // Get confirmation
     if !ui::confirm_dangerous_operation(device, &format!("SECURE ERASE ({} passes)", passes))? {
         println!("{}", style("Operation cancelled.").yellow());
         return Ok(());
     }
 
-    // Perform secure erase
     ui::perform_secure_erase(device, passes)?;
 
     Ok(())
@@ -200,7 +163,6 @@ fn handle_verify_device() -> Result<()> {
     let selection = ui::select_device(&devices)?;
     let device = &devices[selection];
 
-    // Verify doesn't need write access, but still check admin
     if !platform::has_admin_privileges() {
         println!(
             "{}",

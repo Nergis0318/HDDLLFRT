@@ -1,42 +1,7 @@
 use crate::device::{DeviceType, StorageDevice};
 use anyhow::{Context, Result};
 use std::fs;
-use std::os::unix::io::AsRawFd;
 use std::path::Path;
-
-// NVMe ioctl definition
-#[repr(C)]
-#[derive(Debug, Default)]
-struct NvmeAdminCmd {
-    opcode: u8,
-    flags: u8,
-    rsvd1: u16,
-    nsid: u32,
-    cdw2: u32,
-    cdw3: u32,
-    metadata: u64,
-    addr: u64,
-    metadata_len: u32,
-    data_len: u32,
-    cdw10: u32,
-    cdw11: u32,
-    cdw12: u32,
-    cdw13: u32,
-    cdw14: u32,
-    cdw15: u32,
-    timeout_ms: u32,
-    result: u32,
-}
-
-const NVME_IOCTL_ID: u8 = b'N';
-const NVME_IOCTL_ADMIN_CMD_SEQ: u8 = 0x41;
-
-nix::ioctl_readwrite!(
-    nvme_admin_cmd,
-    NVME_IOCTL_ID,
-    NVME_IOCTL_ADMIN_CMD_SEQ,
-    NvmeAdminCmd
-);
 
 /// Detect all block devices on Linux
 pub fn detect_devices() -> Result<Vec<StorageDevice>> {
@@ -135,7 +100,7 @@ fn determine_device_type(sys_path: &Path) -> DeviceType {
     }
 
     // Check if it's a USB device
-    if let Ok(_) = read_sys_file(&sys_path.join("device/../../idVendor")) {
+    if read_sys_file(&sys_path.join("device/../../idVendor")).is_ok() {
         return DeviceType::USB;
     }
 
@@ -166,20 +131,22 @@ pub fn has_admin_privileges() -> bool {
 }
 
 pub fn is_device_mounted(device: &StorageDevice) -> Result<bool> {
-    // Read /proc/mounts to check if device or its partitions are mounted
     let mounts = fs::read_to_string("/proc/mounts")?;
+    let device_base = &device.path;
 
-    // Check if the device itself is mounted
-    if mounts.contains(&device.path) {
-        return Ok(true);
-    }
-
-    // Check if any partition is mounted (e.g., /dev/sda1, /dev/sda2)
-    let device_base = device.path.trim_end_matches(char::is_numeric);
     for line in mounts.lines() {
         if let Some(mount_device) = line.split_whitespace().next() {
-            if mount_device.starts_with(device_base) {
+            // Exact match: the device itself is mounted
+            if mount_device == *device_base {
                 return Ok(true);
+            }
+            // Partition match: /dev/sda1 starts with /dev/sda but only if
+            // the next character after the base path is a digit
+            if mount_device.starts_with(device_base.as_str()) {
+                let suffix = &mount_device[device_base.len()..];
+                if suffix.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+                    return Ok(true);
+                }
             }
         }
     }
@@ -187,11 +154,22 @@ pub fn is_device_mounted(device: &StorageDevice) -> Result<bool> {
     Ok(false)
 }
 
-/// Open a device for exclusive access
+/// Open a device for exclusive access with flock
 pub fn open_device_exclusive(path: &str) -> Result<std::fs::File> {
-    std::fs::OpenOptions::new()
+    use std::os::unix::io::AsRawFd;
+
+    let file = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
         .open(path)
-        .context("Failed to open device")
+        .context("Failed to open device")?;
+
+    // Acquire exclusive lock
+    let ret = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+    if ret != 0 {
+        let err = std::io::Error::last_os_error();
+        anyhow::bail!("Failed to acquire exclusive lock on {}: {}", path, err);
+    }
+
+    Ok(file)
 }

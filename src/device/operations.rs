@@ -1,6 +1,5 @@
 use super::StorageDevice;
 use anyhow::{Context, Result};
-use indicatif::{ProgressBar, ProgressStyle};
 use std::io::{Read, Seek, SeekFrom, Write};
 
 /// Callback for progress updates during format operations
@@ -19,7 +18,7 @@ pub fn quick_format(device: &StorageDevice) -> Result<()> {
     let mut file = crate::platform::open_device_exclusive(&device.path)
         .context(format!("Failed to open device: {}", device.path))?;
 
-    // Buffer size (10 MB)
+    // Buffer size (10 MiB)
     const BUFFER_SIZE: usize = 10 * 1024 * 1024;
     let buffer = vec![0u8; BUFFER_SIZE];
 
@@ -49,7 +48,7 @@ pub fn verify_device(
 
     let total_bytes = device.capacity;
 
-    // Use a larger buffer (4MB)
+    // Use a larger buffer (4MiB)
     const BUFFER_SIZE: usize = 4 * 1024 * 1024;
     let mut buffer = vec![0u8; BUFFER_SIZE];
 
@@ -64,7 +63,7 @@ pub fn verify_device(
             Ok(n) => {
                 if n == 0 {
                     break;
-                } // EOF
+                }
                 current += n as u64;
                 if let Some(ref cb) = progress_callback {
                     cb(current, total_bytes);
@@ -91,7 +90,7 @@ pub fn erase_with_pattern(
 
     let total_bytes = device.capacity;
 
-    // Use a larger buffer (4MB) for better performance
+    // Use a larger buffer (4MiB) for better performance
     const BUFFER_SIZE: usize = 4 * 1024 * 1024;
     let buffer = vec![pattern; BUFFER_SIZE];
 
@@ -118,8 +117,12 @@ pub fn erase_with_pattern(
 }
 
 /// Perform a secure erase (multiple passes with different patterns)
-pub fn secure_erase(device: &StorageDevice, passes: u32) -> Result<()> {
-    let patterns = vec![0x00, 0xFF, 0xAA, 0x55];
+pub fn secure_erase(
+    device: &StorageDevice,
+    passes: u32,
+    progress_callback: Option<ProgressCallback>,
+) -> Result<()> {
+    let patterns = [0x00, 0xFF, 0xAA, 0x55];
 
     for pass in 0..passes {
         let pattern = patterns[(pass as usize) % patterns.len()];
@@ -130,25 +133,33 @@ pub fn secure_erase(device: &StorageDevice, passes: u32) -> Result<()> {
             pattern
         );
 
-        let pb = ProgressBar::new(device.capacity);
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
-                .expect("Invalid progress bar template")
-                .progress_chars("#>-"),
-        );
+        let cb = progress_callback.as_ref().map(|_| {
+            let pass_num = pass + 1;
+            let total_passes = passes;
+            let cb_ref: ProgressCallback = Box::new(move |current, _total| {
+                log::debug!(
+                    "Pass {}/{}: {} bytes written",
+                    pass_num,
+                    total_passes,
+                    current
+                );
+            });
+            cb_ref
+        });
 
-        let pb_clone = pb.clone();
-        erase_with_pattern(
-            device,
-            pattern,
-            Some(Box::new(move |current, _total| {
-                pb_clone.set_position(current);
-            })),
-        )?;
-
-        pb.finish_with_message(format!("Pass {} completed", pass + 1));
+        erase_with_pattern(device, pattern, cb)?;
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_progress_callback_type() {
+        let cb: ProgressCallback = Box::new(|_current, _total| {});
+        let _ = cb;
+    }
 }

@@ -19,10 +19,10 @@ use windows::Win32::System::Ioctl::{
 };
 #[cfg(target_os = "windows")]
 use windows::core::PCWSTR;
-// #[cfg(target_os = "windows")]
-// use windows::Win32::System::SystemServices::{GENERIC_READ, GENERIC_WRITE};
 
 const GENERIC_READ: u32 = 0x80000000;
+
+const MAX_PHYSICAL_DRIVES: u32 = 64;
 
 pub fn detect_devices() -> Result<Vec<StorageDevice>> {
     #[cfg(target_os = "windows")]
@@ -41,8 +41,7 @@ fn detect_devices_impl() -> Result<Vec<StorageDevice>> {
 
     let mut devices = Vec::new();
 
-    // Try to open physical drives 0-15
-    for i in 0..16 {
+    for i in 0..MAX_PHYSICAL_DRIVES {
         let device_path = format!("\\\\.\\PhysicalDrive{}", i);
 
         let wide_path = match U16CString::from_str(&device_path) {
@@ -61,11 +60,10 @@ fn detect_devices_impl() -> Result<Vec<StorageDevice>> {
                 None,
             );
 
-            if handle.is_err() || handle.as_ref().unwrap().is_invalid() {
-                continue;
-            }
-
-            let handle = handle.unwrap();
+            let handle = match handle {
+                Ok(h) if !h.is_invalid() => h,
+                _ => continue,
+            };
 
             // Get disk geometry to determine size
             let capacity = get_disk_capacity(handle);
@@ -239,10 +237,8 @@ unsafe fn get_device_details(handle: HANDLE) -> DeviceDetails {
                     if device_type == DeviceType::Unknown {
                         device_type = DeviceType::SSD;
                     }
-                } else {
-                    if device_type == DeviceType::Unknown {
-                        device_type = DeviceType::HDD;
-                    }
+                } else if device_type == DeviceType::Unknown {
+                    device_type = DeviceType::HDD;
                 }
             }
         }
@@ -260,12 +256,8 @@ unsafe fn get_device_details(handle: HANDLE) -> DeviceDetails {
 pub fn has_admin_privileges() -> bool {
     #[cfg(target_os = "windows")]
     {
-        // Check if running as administrator
-        // This is a simplified check
         use std::process::Command;
-
-        let output = Command::new("net").args(&["session"]).output();
-
+        let output = Command::new("net").args(["session"]).output();
         match output {
             Ok(out) => out.status.success(),
             Err(_) => false,
@@ -277,10 +269,54 @@ pub fn has_admin_privileges() -> bool {
     }
 }
 
-pub fn is_device_mounted(_device: &StorageDevice) -> Result<bool> {
-    // On Windows, check if any volume is using this physical drive
-    // This is a simplified implementation
-    Ok(false)
+pub fn is_device_mounted(device: &StorageDevice) -> Result<bool> {
+    #[cfg(target_os = "windows")]
+    {
+        // Parse drive number from path
+        let drive_num = if device.path.starts_with(r"\\.\PhysicalDrive") {
+            device
+                .path
+                .trim_start_matches(r"\\.\PhysicalDrive")
+                .parse::<u32>()
+                .ok()
+        } else {
+            return Ok(false);
+        };
+
+        let Some(target_disk_num) = drive_num else {
+            return Ok(false);
+        };
+
+        // Enumerate logical drives and check if any volume belongs to this disk
+        let drives = unsafe { GetLogicalDrives() };
+        for i in 0..26 {
+            if (drives & (1 << i)) != 0 {
+                let drive_letter = (b'A' + i as u8) as char;
+                let volume_path = format!(r"\\.\{}:", drive_letter);
+
+                if let Ok(volume_file) = std::fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(&volume_path)
+                {
+                    use std::os::windows::prelude::*;
+                    let handle = HANDLE(volume_file.as_raw_handle() as _);
+                    if let Ok(disk_num) = get_volume_disk_number(handle) {
+                        if disk_num == target_disk_num {
+                            return Ok(true);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(false)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = device;
+        Ok(false)
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -386,7 +422,7 @@ fn lock_and_dismount_volume(handle: HANDLE) -> bool {
         }
 
         // Dismount the volume
-        if DeviceIoControl(
+        let _ = DeviceIoControl(
             handle,
             FSCTL_DISMOUNT_VOLUME,
             None,
@@ -395,11 +431,7 @@ fn lock_and_dismount_volume(handle: HANDLE) -> bool {
             0,
             Some(&mut bytes_returned),
             None,
-        )
-        .is_err()
-        {
-            // If dismount fails, we might still have the lock, which is good.
-        }
+        );
     }
 
     true
