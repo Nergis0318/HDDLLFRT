@@ -60,7 +60,7 @@ fn detect_devices_impl() -> Result<Vec<StorageDevice>> {
                 None,
             );
 
-            let handle = match handle {
+            let handle: HANDLE = match handle {
                 Ok(h) if !h.is_invalid() => h,
                 _ => continue,
             };

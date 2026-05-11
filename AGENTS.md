@@ -1,82 +1,63 @@
 # Agent Guidelines for HDDLLFRT
 
-This repository contains the source code for the HDD Low Level Format Tool (HDDLLFRT), a cross-platform utility written in Rust.
+Rust 2024 edition. Cross-platform HDD low-level format CLI tool.
 
-## 1. Build & Test Commands
+## Build & Verify
 
-### Build
+```bash
+cargo build              # dev build
+cargo build --release    # optimized (LTO, strip, single codegen-unit)
+cargo check              # fast type-check
+cargo test               # unit tests only (in src/device/)
+cargo fmt -- --check     # CI enforces formatting
+cargo clippy -- -D warnings -A dead_code -A clippy::upper_case_acronyms  # CI rule
+```
 
-- **Build (Dev):** `cargo build`
-- **Build (Release):** `cargo build --release`
-- **Check (Fast):** `cargo check`
+CI runs build + test on all three platforms (ubuntu, windows, macos). Platform code compiles conditionally — `cargo check` on one OS only verifies that platform's paths.
 
-### Test
+## Architecture
 
-- **Run All Tests:** `cargo test`
-- **Run Single Test:** `cargo test -- <test_function_name>` (e.g., `cargo test -- test_device_detection`)
-- **Run Tests with Logs:** `RUST_LOG=debug cargo test`
+Single-crate binary (`hddllfrt`). No workspace, no integration tests, no examples.
 
-### Lint & Format
+```
+src/
+  main.rs          — CLI entry, menu loop, operation orchestration
+  device/
+    mod.rs         — StorageDevice struct, DeviceType enum, unit tests
+    operations.rs  — format/erase/verify logic (low_level_format, quick_format, secure_erase, verify_device)
+  platform/
+    mod.rs         — DeviceHandle (File wrapper with OS-specific locks), cross-platform API
+    windows.rs     — Win32 API via `windows` crate (CreateFileW, DeviceIoControl, FSCTL_LOCK_VOLUME)
+    linux.rs       — /sys/block enumeration, flock-based exclusive open
+    macos.rs       — diskutil plist parsing, flock-based exclusive open
+  ui/
+    mod.rs         — dialoguer menus, indicatif progress bars, console styling
+```
 
-- **Format Code:** `cargo fmt` (Run this before committing)
-- **Lint Code:** `cargo clippy` (Fix warnings where possible)
+`platform::open_device_exclusive` returns `DeviceHandle`. On Windows it locks and dismounts all volumes on the target disk before opening. On Unix it uses `flock(LOCK_EX | LOCK_NB)`.
 
-## 2. Code Style & Conventions
+## Key Dependencies
 
-### General
+- `windows` crate (0.52) — Win32 FFI, feature-gated per API group
+- `dialoguer` — interactive prompts (Select, Confirm, Input)
+- `indicatif` — progress bars
+- `console` — terminal styling
+- `anyhow` — error handling, `.context()` on all fallible calls
+- `plist` (macOS only) — parses diskutil output
+- `nix` (Linux only) — ioctl/mount abstractions
 
-- **Language:** Rust (2024 Edition).
-- **Formatting:** Strictly adhere to `rustfmt` standards.
-- **Organization:**
-  - `src/main.rs`: CLI entry point and high-level command handlers.
-  - `src/device/`: Core device abstractions and types.
-  - `src/platform/`: OS-specific implementations (Windows, Linux, macOS).
-  - `src/ui/`: CLI interaction and display logic.
+## Conventions
 
-### Naming
+- Error handling: `anyhow::Result<T>` everywhere, `.context("...")` on propagation, no bare `unwrap()` in production paths.
+- Platform code gated with `#[cfg(target_os = "...")]`. The `platform/mod.rs` re-exports dispatch at runtime via cfg blocks, not traits.
+- `DeviceHandle` in `platform/mod.rs` implements `Read + Write + Seek` + manual `sync_all` + Unix `write_at`/`read_at`. The Windows variant holds extra `_locks: Vec<File>` to keep volume locks alive.
+- Admin privilege check: `net session` on Windows, `geteuid() == 0` on Unix. Non-admin is a soft warning on startup, hard requirement before destructive ops.
+- Two-step confirmation before any destructive operation. Safety checks (admin + mount detection) in `ui::check_prerequisites`.
+- Logging: `env_logger` at `Info` level by default. Use `RUST_LOG=debug` for verbose.
 
-- **Functions/Variables:** `snake_case` (e.g., `detect_devices`, `user_input`).
-- **Types (Structs/Enums):** `PascalCase` (e.g., `StorageDevice`, `DeviceType`).
-- **Constants:** `SCREAMING_SNAKE_CASE` (e.g., `GENERIC_READ`).
-- **Files:** `snake_case.rs`.
+## What's NOT Here
 
-### Imports
-
-Group imports in the following order:
-
-1. Standard Library (`use std::...`)
-2. External Crates (`use anyhow::...`, `use windows::...`)
-3. Internal Modules (`use crate::device::...`)
-
-### Error Handling
-
-- **Library:** Use `anyhow` for application-level error handling.
-- **Return Type:** Use `anyhow::Result<T>` for functions that can fail.
-- **Context:** Always attach context to errors when propagating:
-
-  ```rust
-  .context("Failed to detect devices")?
-  ```
-
-- **Panic:** Avoid `unwrap()` or `expect()` in production code unless you are 100% certain it cannot fail. Use `?` propagation.
-
-### OS-Specific Code
-
-- **Feature Flags:** Use `#[cfg(target_os = "...")]` to guard platform-specific code.
-- **Safety:** Minimize `unsafe` blocks. When using FFI (e.g., Windows API), wrap `unsafe` blocks tightly and justify if complex.
-- **Windows API:** Use the `windows` crate (specifically `windows::Win32`).
-
-### Logging & Output
-
-- **User Output:** Use `println!` and `eprintln!` for CLI interaction (menus, prompts). Use `console::style` for coloring.
-- **Debug/Info:** Use `log::info!`, `log::debug!`, etc., for internal diagnostics. Initialize `env_logger` in `main`.
-
-## 3. Cursor/Copilot Rules
-
-_(No specific existing rules found in .cursor/rules/ or .github/copilot-instructions.md. Follow standard Rust best practices defined above.)_
-
-## 4. Agent Workflow
-
-1. **Analyze:** specific platform implementation files (e.g., `src/platform/windows.rs`) before making OS-specific changes.
-2. **Verify:** Always run `cargo check` after edits.
-3. **Safety:** When modifying device operations (formatting/erasing), ensure safety checks (admin privileges, confirmation prompts) are preserved.
+- No tests outside `src/device/` (operations and platform code are untested).
+- No CI lint for unused imports or dead code beyond clippy defaults (dead_code is explicitly allowed).
+- No `CLAUDE.md`, `.cursor/rules/`, or `.github/copilot-instructions.md`.
+- Release profile uses `panic = "abort"` and `strip = true` — no debug info in release builds.
